@@ -27,6 +27,20 @@ Installation
 	# insmod ./xr_usb_serial_common.ko
 
 
+* Alternativley install via DKMS
+
+    # cp -a ../$(basename $(pwd)) /usr/src/xr_usb_serial_common-1c
+    # dkms add -m xr_usb_serial_common -v 1c
+    # dkms build -m xr_usb_serial_common -v 1c
+    # dkms install -m xr_usb_serial_common -v 1c
+
+
+* Ensure that the cdc-acm module is not loaded (assumig that it is not needed)
+
+    # echo blacklist cdc-acm > /etc/modprobe.d/blacklist-cdc-acm.conf
+    # update-initramfs -u
+
+
 * Plug the device into the USB host.  You should see up to four devices created,
   typically /dev/ttyXRUSB[0-3].
 
