@@ -175,7 +175,13 @@ int xr_usb_serial_get_reg(struct xr_usb_serial *xr_usb_serial,int regnum, short 
 {
 	int result;
 	int channel = 0;
-	
+
+	void *dmadata = kmalloc(2, GFP_KERNEL);
+	if (!dmadata) {
+		dev_err(&xr_usb_serial->control->dev, "%s - Cannot allocate USB buffer.\n", __func__);
+		return -ENOMEM;
+	}
+
 	if((xr_usb_serial->DeviceProduct&0xfff0) == 0x1400)
 	{
 		int XR2280xaddr = XR2280x_FUNC_MGR_OFFSET + regnum; 
@@ -185,7 +191,7 @@ int xr_usb_serial_get_reg(struct xr_usb_serial *xr_usb_serial,int regnum, short 
                                  USB_DIR_IN | USB_TYPE_VENDOR ,    /* request_type */
                                  0,                               /* request value */
                                  XR2280xaddr,                    /* index */
-                                 value,                           /* data */
+                                 dmadata,                         /* data */
                                  2,                               /* size */
                                  5000);                           /* timeout */
 		
@@ -204,7 +210,7 @@ int xr_usb_serial_get_reg(struct xr_usb_serial *xr_usb_serial,int regnum, short 
                                  USB_DIR_IN | USB_TYPE_VENDOR,    /* request_type */
                                  0,                               /* request value */
                                  regnum | (channel << 8),              /* index */
-                                 value,                           /* data */
+                                 dmadata,                         /* data */
                                  1,                               /* size */
                                  5000);                           /* timeout */
 	}
@@ -216,7 +222,7 @@ int xr_usb_serial_get_reg(struct xr_usb_serial *xr_usb_serial,int regnum, short 
                                  USB_DIR_IN | USB_TYPE_VENDOR,    /* request_type */
                                  0,                               /* request value */
                                  regnum,                          /* index */
-                                 value,                           /* data */
+                                 dmadata,                         /* data */
                                  2,                               /* size */
                                  5000);                           /* timeout */
 	}
@@ -232,7 +238,7 @@ int xr_usb_serial_get_reg(struct xr_usb_serial *xr_usb_serial,int regnum, short 
                                  USB_DIR_IN | USB_TYPE_VENDOR | 1,    /* request_type */
                                  0,                               /* request value */
                                  regnum | (channel << 8),              /* index */
-                                 value,                           /* data */
+                                 dmadata,                         /* data */
                                  2,                               /* size */
                                  5000);                           /* timeout */
 	}
@@ -240,7 +246,10 @@ int xr_usb_serial_get_reg(struct xr_usb_serial *xr_usb_serial,int regnum, short 
 	{
 	    result = -1;
 	}
-	
+
+	memcpy(value, dmadata, 2);
+	kfree(dmadata);
+
 	if(result < 0)
 		dev_err(&xr_usb_serial->control->dev, "%s channel:%d Reg 0x%x Error:%d\n", __func__,channel,regnum,result);
 	//else
@@ -255,6 +264,13 @@ int xr_usb_serial_get_reg_ext(struct xr_usb_serial *xr_usb_serial,int channel,in
 {
 	int result;
 	int XR2280xaddr = XR2280x_FUNC_MGR_OFFSET + regnum; 
+
+	void *dmadata = kmalloc(2, GFP_KERNEL);
+	if (!dmadata) {
+		dev_err(&xr_usb_serial->control->dev, "%s - Cannot allocate USB buffer.\n", __func__);
+		return -ENOMEM;
+	}
+
 	if((xr_usb_serial->DeviceProduct&0xfff0) == 0x1400)
 	{
 		
@@ -264,7 +280,7 @@ int xr_usb_serial_get_reg_ext(struct xr_usb_serial *xr_usb_serial,int channel,in
                                  USB_DIR_IN | USB_TYPE_VENDOR ,    /* request_type */
                                  0,                               /* request value */
                                  XR2280xaddr,                    /* index */
-                                 value,                           /* data */
+                                 dmadata,                         /* data */
                                  2,                               /* size */
                                  5000);                           /* timeout */
 		
@@ -275,18 +291,15 @@ int xr_usb_serial_get_reg_ext(struct xr_usb_serial *xr_usb_serial,int channel,in
 		    (xr_usb_serial->DeviceProduct == 0x1412) ||
 		    (xr_usb_serial->DeviceProduct == 0x1414))
 	{
-	   unsigned char reg_value = 0;
 	   result = usb_control_msg(xr_usb_serial->dev,                     /* usb device */
                                  usb_rcvctrlpipe(xr_usb_serial->dev, 0), /* endpoint pipe */
                                  XR_GET_MAP_XR21V141X,                     /* request */
                                  USB_DIR_IN | USB_TYPE_VENDOR,    /* request_type */
                                  0,                               /* request value */
                                  regnum | (channel << 8),              /* index */
-                                 &reg_value,                           /* data */
+                                 dmadata,                         /* data */
                                  1,                               /* size */
                                  5000);                           /* timeout */
-	   //dev_dbg(&xr_usb_serial->control->dev, "xr_usb_serial_get_reg_ext reg:%x\n",reg_value);
-	   *value = reg_value; 
 	}
 	else if(xr_usb_serial->DeviceProduct == 0x1411) 
 	{
@@ -296,7 +309,7 @@ int xr_usb_serial_get_reg_ext(struct xr_usb_serial *xr_usb_serial,int channel,in
                                  USB_DIR_IN | USB_TYPE_VENDOR ,       /* request_type */
                                  0,                               /* request value */
                                  regnum | (channel << 8),              /* index */
-                                 value,                           /* data */
+                                 dmadata,                         /* data */
                                  2,                               /* size */
                                  5000);                           /* timeout */
 	}
@@ -310,7 +323,7 @@ int xr_usb_serial_get_reg_ext(struct xr_usb_serial *xr_usb_serial,int channel,in
                                  USB_DIR_IN | USB_TYPE_VENDOR | 1,    /* request_type */
                                  0,                               /* request value */
                                  regnum | (channel << 8),              /* index */
-                                 value,                           /* data */
+                                 dmadata,                         /* data */
                                  2,                               /* size */
                                  5000);                           /* timeout */
 	}
@@ -319,6 +332,9 @@ int xr_usb_serial_get_reg_ext(struct xr_usb_serial *xr_usb_serial,int channel,in
 	    result = -1;
 	}
 	
+	memcpy(value, dmadata, 2);
+	kfree(dmadata);
+
 	if(result < 0)
 		dev_err(&xr_usb_serial->control->dev, "%s Error:%d\n", __func__,result);
 	//else

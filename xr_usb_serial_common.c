@@ -903,7 +903,7 @@ static int xr_usb_serial_tty_ioctl(struct tty_struct *tty,
     unsigned int  channel, reg, val,preciseflags;
     int           baud_rate = 0;
 	struct usb_cdc_line_coding newline;
-    short	*data;
+    short	data;
 	switch (cmd) {
 	case TIOCGSERIAL: /* gets serial port data */
 		rv = get_serial_info(xr_usb_serial, (struct serial_struct __user *) arg);
@@ -916,35 +916,26 @@ static int xr_usb_serial_tty_ioctl(struct tty_struct *tty,
                         return -EFAULT;
                 if (get_user(reg, (int __user *)(arg + sizeof(int))))
                         return -EFAULT;
-
-                data = kmalloc(2, GFP_KERNEL);
-                if (data == NULL) {
-                        dev_err(&xr_usb_serial->control->dev, "%s - Cannot allocate USB buffer.\n", __func__);
-                        return -ENOMEM;
-		}
         			
 		        if (channel == -1)
 		        {
-		          rv = xr_usb_serial_get_reg(xr_usb_serial,reg, data);
+		          rv = xr_usb_serial_get_reg(xr_usb_serial,reg, &data);
 		        }
 				else
 				{
-			  	  rv = xr_usb_serial_get_reg_ext(xr_usb_serial,channel,reg, data);
+			  	  rv = xr_usb_serial_get_reg_ext(xr_usb_serial,channel,reg, &data);
 				}
                 if (rv < 0)
                 {
                         dev_err(&xr_usb_serial->control->dev, "Cannot get register (%d)\n", rv);
-                        kfree(data);
                         return -EFAULT;
                 }
-				if (put_user(le16_to_cpu(*data), (int __user *)(arg + 2 * sizeof(int))))
+				if (put_user(le16_to_cpu(data), (int __user *)(arg + 2 * sizeof(int))))
               	{
                    dev_err(&xr_usb_serial->control->dev, "Cannot put user result\n");
-                   kfree(data);
                    return -EFAULT;
                 }
                 rv = 0;
-                kfree(data);
                 break;
 
       case XR_USB_SERIAL_SET_REG:
@@ -1003,39 +994,29 @@ static int xr_usb_serial_tty_ioctl(struct tty_struct *tty,
 		xr_usb_serial_disable(xr_usb_serial);
 		if (get_user(channel, (int __user *)arg))
                         return -EFAULT;
-       
-        data = kmalloc(2, GFP_KERNEL);
-        if (data == NULL) {
-                dev_err(&xr_usb_serial->control->dev, "%s - Cannot allocate USB buffer.\n", __func__);
-                return -ENOMEM;
-		}
 
 		if (channel == -1)
 		{
-		     rv = xr_usb_serial_get_reg(xr_usb_serial,xr_usb_serial->reg_map.uart_gpio_mode_addr, data);
+		     rv = xr_usb_serial_get_reg(xr_usb_serial,xr_usb_serial->reg_map.uart_gpio_mode_addr, &data);
 		}
 		else
 		{
-		    rv = xr_usb_serial_get_reg_ext(xr_usb_serial,channel,xr_usb_serial->reg_map.uart_gpio_mode_addr,data);
+		    rv = xr_usb_serial_get_reg_ext(xr_usb_serial,channel,xr_usb_serial->reg_map.uart_gpio_mode_addr,&data);
 		}
 		
 		xr_usb_serial_enable(xr_usb_serial);
 		
-		dev_dbg(&xr_usb_serial->control->dev, "XR_USB_SERIAL_GET_GPIO_MODE_REG 0x%x val:0x%x \n", xr_usb_serial->reg_map.uart_gpio_mode_addr,*data);
+		dev_dbg(&xr_usb_serial->control->dev, "XR_USB_SERIAL_GET_GPIO_MODE_REG 0x%x val:0x%x \n", xr_usb_serial->reg_map.uart_gpio_mode_addr,data);
 		
         if (rv < 0 ) {
                 dev_err(&xr_usb_serial->control->dev, "Cannot get register (%d) channel=%d \n", rv,channel);
-                kfree(data);
                 return -EFAULT;
         }
 				
-        if (put_user(data[0], (int __user *)(arg + sizeof(int)))) {
+        if (put_user(data, (int __user *)(arg + sizeof(int)))) {
                 dev_err(&xr_usb_serial->control->dev, "Cannot put user result\n");
-                kfree(data);
                 return -EFAULT;
         }
-
-        kfree(data);
 		break;
 	case XRIOC_SET_ANY_BAUD_RATE:
 		
