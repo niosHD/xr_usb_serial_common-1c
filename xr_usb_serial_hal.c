@@ -469,9 +469,14 @@ int xr_usb_serial_set_line(struct xr_usb_serial *xr_usb_serial, struct usb_cdc_l
  int xr_usb_serial_set_flow_mode(struct xr_usb_serial *xr_usb_serial, 
  	                                     struct tty_struct *tty, unsigned int cflag)
  {
-	unsigned int flow;
-	unsigned int gpio_mode;
-	
+	unsigned int flow = UART_FLOW_MODE_NONE;
+	unsigned int gpio_mode = UART_GPIO_MODE_SEL_GPIO;
+
+	if(xr_usb_serial->DeviceProduct == 0x1411)
+	{// Default to RS-485 for the 0x1411 devices (see page 18 in https://www.maxlinear.com/ds/xr21b1411.pdf)
+	    gpio_mode = 0xb;
+	}
+
 	if (cflag & CRTSCTS)
 	{
 	    //dev_dbg(&xr_usb_serial->control->dev, "xr_usb_serial_set_flow_mode:hardware\n");
@@ -488,12 +493,6 @@ int xr_usb_serial_set_line(struct xr_usb_serial *xr_usb_serial, struct usb_cdc_l
 
 	    xr_usb_serial_set_reg(xr_usb_serial, xr_usb_serial->reg_map.uart_xon_char_addr, start_char);
 	    xr_usb_serial_set_reg(xr_usb_serial, xr_usb_serial->reg_map.uart_xoff_char_addr, stop_char);
-	}
-	else
-	{
-	    //dev_dbg(&xr_usb_serial->control->dev, "xr_usb_serial_set_flow_mode:none\n");
-	    flow      = UART_FLOW_MODE_NONE;
-	    gpio_mode = UART_GPIO_MODE_SEL_GPIO;
 	}
 	
     if((xr_usb_serial->DeviceProduct == 0x1420)||
