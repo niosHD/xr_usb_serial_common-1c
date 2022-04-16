@@ -66,6 +66,14 @@ static struct xr_usb_serial *xr_usb_serial_table[XR_USB_SERIAL_TTY_MINORS];
 
 static DEFINE_MUTEX(xr_usb_serial_table_lock);
 
+static inline struct tty_driver *alloc_tty_driver(unsigned int lines)
+{
+       struct tty_driver *ret = tty_alloc_driver(lines, 0);
+       if (IS_ERR(ret))
+               return NULL;
+       return ret;
+}
+
 /*
  * xr_usb_serial_table accessors
  */
@@ -764,7 +772,7 @@ static int xr_usb_serial_tty_write(struct tty_struct *tty,
 	return count;
 }
 
-static int xr_usb_serial_tty_write_room(struct tty_struct *tty)
+static unsigned int xr_usb_serial_tty_write_room(struct tty_struct *tty)
 {
 	struct xr_usb_serial *xr_usb_serial = tty->driver_data;
 	/*
@@ -774,7 +782,7 @@ static int xr_usb_serial_tty_write_room(struct tty_struct *tty)
 	return xr_usb_serial_wb_is_avail(xr_usb_serial) ? xr_usb_serial->writesize : 0;
 }
 
-static int xr_usb_serial_tty_chars_in_buffer(struct tty_struct *tty)
+static unsigned int xr_usb_serial_tty_chars_in_buffer(struct tty_struct *tty)
 {
 	struct xr_usb_serial *xr_usb_serial = tty->driver_data;
 	/*
@@ -916,15 +924,15 @@ static int xr_usb_serial_tty_ioctl(struct tty_struct *tty,
                         return -EFAULT;
                 if (get_user(reg, (int __user *)(arg + sizeof(int))))
                         return -EFAULT;
-        			
-		        if (channel == -1)
-		        {
-		          rv = xr_usb_serial_get_reg(xr_usb_serial,reg, &data);
-		        }
-				else
-				{
-			  	  rv = xr_usb_serial_get_reg_ext(xr_usb_serial,channel,reg, &data);
-				}
+
+                if (channel == -1)
+                {
+                        rv = xr_usb_serial_get_reg(xr_usb_serial,reg, &data);
+                }
+                else
+                {
+                        rv = xr_usb_serial_get_reg_ext(xr_usb_serial,channel,reg, &data);
+                }
                 if (rv < 0)
                 {
                         dev_err(&xr_usb_serial->control->dev, "Cannot get register (%d)\n", rv);
@@ -946,19 +954,18 @@ static int xr_usb_serial_tty_ioctl(struct tty_struct *tty,
                 if (get_user(val, (int __user *)(arg + 2 * sizeof(int))))
                         return -EFAULT;
 
-			if (channel == -1)
-			{
-				rv = xr_usb_serial_set_reg(xr_usb_serial,reg, val);
-			}
-			else
-			{
-			 	rv = xr_usb_serial_set_reg_ext(xr_usb_serial,channel,reg, val);
-				
-			}
-		    if (rv < 0)
-               return -EFAULT;  
-			rv = 0;
-            break;
+                if (channel == -1)
+                {
+                        rv = xr_usb_serial_set_reg(xr_usb_serial,reg, val);
+                }
+                else
+                {
+                        rv = xr_usb_serial_set_reg_ext(xr_usb_serial,channel,reg, val);
+                }
+                if (rv < 0)
+                        return -EFAULT;
+                rv = 0;
+                break;
 	case XR_USB_SERIAL_LOOPBACK:
 		     if (get_user(channel, (int __user *)arg))
                         return -EFAULT;
@@ -1728,7 +1735,7 @@ static int xr_usb_serial_suspend(struct usb_interface *intf, pm_message_t messag
 	if (cnt)
 		return 0;
 
-	if (test_bit(ASYNCB_INITIALIZED, &xr_usb_serial->port.flags))
+	if (tty_port_initialized(&xr_usb_serial->port))
 		stop_data_traffic(xr_usb_serial);
 
 	return 0;
@@ -1749,7 +1756,7 @@ static int xr_usb_serial_resume(struct usb_interface *intf)
 	if (cnt)
 		return 0;
 
-	if (test_bit(ASYNCB_INITIALIZED, &xr_usb_serial->port.flags)) {
+	if (tty_port_initialized(&xr_usb_serial->port)) {
 		rv = usb_submit_urb(xr_usb_serial->ctrlurb, GFP_NOIO);
 
 		spin_lock_irq(&xr_usb_serial->write_lock);
@@ -1783,7 +1790,7 @@ static int xr_usb_serial_reset_resume(struct usb_interface *intf)
 #else
    	struct tty_struct *tty;
 #endif
-	if (test_bit(ASYNCB_INITIALIZED, &xr_usb_serial->port.flags)){
+	if (tty_port_initialized(&xr_usb_serial->port)){
 #if LINUX_VERSION_CODE > KERNEL_VERSION(3, 9, 0)	
 	tty_port_tty_hangup(&xr_usb_serial->port, false);
 #else
@@ -1882,14 +1889,14 @@ static int __init xr_usb_serial_init(void)
 
 	retval = tty_register_driver(xr_usb_serial_tty_driver);
 	if (retval) {
-		put_tty_driver(xr_usb_serial_tty_driver);
+		tty_driver_kref_put(xr_usb_serial_tty_driver);
 		return retval;
 	}
 
 	retval = usb_register(&xr_usb_serial_driver);
 	if (retval) {
 		tty_unregister_driver(xr_usb_serial_tty_driver);
-		put_tty_driver(xr_usb_serial_tty_driver);
+		tty_driver_kref_put(xr_usb_serial_tty_driver);
 		return retval;
 	}
 
@@ -1902,7 +1909,7 @@ static void __exit xr_usb_serial_exit(void)
 {
 	usb_deregister(&xr_usb_serial_driver);
 	tty_unregister_driver(xr_usb_serial_tty_driver);
-	put_tty_driver(xr_usb_serial_tty_driver);
+	tty_driver_kref_put(xr_usb_serial_tty_driver);
 }
 
 module_init(xr_usb_serial_init);
